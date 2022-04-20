@@ -9,9 +9,11 @@ import Card from '@mui/material/Card';
 import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
 import { BarChart, Bar, XAxis, YAxis } from 'recharts';
 import 'typeface-roboto';
 import { PokemonClient, Pokemon, PokemonStat } from 'pokenode-ts';
+import * as E from 'fp-ts/Either';
 import { api, getPokemon } from './pokemonApi';
 
 /* eslint react/require-default-props: 0 */
@@ -48,15 +50,19 @@ const PokemonStatList: FC<StatList> = ({ stats }) => (
 
 const PokemonContainer: FC<PokemonId> = () => {
   const pokemonApi: PokemonClient = useMemo(() => api(), []);
-  const [pokemon, setPokemon] = useState<Pokemon | undefined>();
+  const [pokemon, setPokemon] = useState<E.Either<Error, Pokemon>>(
+    E.left(new Error('not initialize')),
+  );
   const [id, setId] = useState<number>(1);
 
   useEffect(() => {
-    getPokemon(id, pokemonApi)
-      .then((fetchPokemon) => {
-        if (fetchPokemon) setPokemon(fetchPokemon);
-      })
-      .catch(() => setPokemon(undefined));
+    const load = async () => {
+      const loadPokemon = await getPokemon(id, pokemonApi)();
+      setPokemon(loadPokemon);
+    };
+    load()
+      .then(() => undefined)
+      .catch(() => undefined);
   }, [id, pokemonApi]);
 
   return (
@@ -69,15 +75,15 @@ const PokemonContainer: FC<PokemonId> = () => {
           onChange={(event) => setId(Number(event.target.value))}
         />
       </Box>
-      <Box
-        component="img"
-        src={
-          pokemon?.sprites.front_default
-            ? pokemon.sprites.front_default
-            : undefined
-        }
-        alt={`pokemon No.${id}`}
-      />
+      {E.isRight(pokemon) ? (
+        <Box
+          component="img"
+          src={pokemon.right.sprites.front_default ?? undefined}
+          alt={`pokemon No.${id}`}
+        />
+      ) : (
+        <Alert severity="error">{pokemon.left.message}</Alert>
+      )}
       <Container>
         <Typography variant="h6" sx={{ display: 'inline' }}>
           No.{id}
@@ -86,10 +92,12 @@ const PokemonContainer: FC<PokemonId> = () => {
           {' '}
         </Typography>
         <Typography variant="h4" sx={{ display: 'inline' }}>
-          {pokemon?.name}
+          {E.isRight(pokemon) ? pokemon.right.name : null}
         </Typography>
       </Container>
-      {pokemon ? <PokemonStatList stats={pokemon.stats} /> : null}
+      {E.isRight(pokemon) ? (
+        <PokemonStatList stats={pokemon.right.stats} />
+      ) : null}
     </Container>
   );
 };
